@@ -1,81 +1,82 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"bleve.search/handlers"
+	"bleve.search/model"
 	"bleve.search/utility"
 	"github.com/blevesearch/bleve/v2"
+	"github.com/bxcodec/faker/v3"
 )
 
-var index bleve.Index
+func generateAndIndex(index bleve.Index, totalFiles int) {
+	var fileInfos []model.FileInfo
+	fileNames := []string{}
+	for i := 0; i < totalFiles; i++ {
+		fileName := faker.Word() + ".txt"
+		fileNames = append(fileNames, fileName)
+		fileInfo := model.FileInfo{
+			Filename: fileName,
+			Path:     "/" + faker.Word() + "/" + faker.Word() + "/" + fileName,
+		}
+		fileInfos = append(fileInfos, fileInfo)
+	}
+
+	jsonData, err := json.MarshalIndent(fileNames, "", "  ")
+	if err != nil {
+		fmt.Println("error marshaling")
+	}
+	err = os.WriteFile("scripts/file_names.json", jsonData, 0644)
+	if err != nil {
+		fmt.Println("error writing in json file")
+	}
+	err = utility.IndexFiles(index, fileInfos)
+	if err != nil {
+		fmt.Println("error indexing")
+	}
+}
+
+func sizeOfIndex(path string) (int64, error) {
+	var size int64
+
+	err := filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return size, nil
+}
 
 func main() {
-	// indexMapping := bleve.NewIndexMapping()
-	// index, err := bleve.New("files.bleve", indexMapping)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// // List of files to index
-	// files := []FileInfo{
-	// 	{Filename: "file1.txt", Path: "/path/to/file1.txt"},
-	// 	{Filename: "file2.txt", Path: "/another/path/file2.txt"},
-	// 	// Add more files here
-	// }
-
-	// // Index each file
-	// for _, file := range files {
-	// 	err = index.Index(file.Filename, file)
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// }
-
-	// // Close the index when done
-	// index.Close()
-
-	//open a new index
-	// index, err := bleve.Open("files.bleve")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// // Query for filenames
-	// searchFilenames := []string{"file1.txt", "file2.txt", "file", "file2"} // List of filenames to search
-
-	// for _, filename := range searchFilenames {
-	// 	// Create a match query for the filename
-	// 	//query := bleve.NewMatchQuery(filename)
-	// 	query := bleve.NewPrefixQuery(filename)
-	// 	//query.SetField("Filename")
-	// 	searchRequest := bleve.NewSearchRequest(query)
-
-	// 	// Execute the search
-	// 	searchResult, err := index.Search(searchRequest)
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-
-	// 	// Display the results
-	// 	fmt.Printf("Search Results for %s:\n", filename)
-	// 	fmt.Println("Searchresultes", searchResult)
-	// 	// for _, hit := range searchResult.Hits {
-	// 	// 	fmt.Printf("ID: %s, Score: %f, Fields: %+v\n", hit.ID, hit.Score, hit.Fields)
-	// 	// }
-	// }
-
-	// // Close the index when done
-	// index.Close()
-
-	index, err := utility.OpenOrCreateIndex("files.bleve")
+	index, err := utility.OpenOrCreateIndex("files_index.bleve")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer index.Close()
+	totalFiles := 100000
+	generateAndIndex(index, totalFiles)
+	size, err := sizeOfIndex("files_index.bleve")
+	if err != nil {
+		fmt.Println("Error in calculating size", err)
+	}
+	fmt.Printf("Size of index for %d files is %d MB \n", totalFiles, size/(1024*1024))
 
-	http.HandleFunc("/index", handlers.IndexHandler(index))
+	// http.HandleFunc("/index", handlers.IndexHandler(index))
 	http.HandleFunc("/search", handlers.SearchHandler(index))
 
 	log.Println("Starting server on :8080")

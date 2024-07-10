@@ -2,7 +2,10 @@ module bleve.search
 
 go 1.20
 
-require github.com/blevesearch/bleve/v2 v2.4.1
+require (
+	github.com/blevesearch/bleve/v2 v2.4.1
+	github.com/bxcodec/faker/v3 v3.8.1
+)
 
 require (
 	github.com/RoaringBitmap/roaring v1.9.3 // indirect
